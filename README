@@ -1,0 +1,15 @@
+geoDiskFiler (C)1994-2019 Bo Zimmerman
+Please read the LICENSE file for license information
+Please read the NOTICE file for credits information
+Home Page: http://www.zimmers.net/geos/
+
+The geoDiskFiler is a filename database for GEOS whose purpose is the creation, updating, sorting, organizing, and printing of the names of all your programs and disk files. The program will work off of all GEOS and CBM disks, as well as any disk drives or printers you may have installed.  When your lists are made, geoDiskFiler stores them in a data file for future updating and access.
+
+Instructions for using geoDiskFiler can be read online at https://github.com/bozimmerman/geoDiskFiler/tree/master/src-html/docDiskFiler.html . The instructions are also in geoWrite format in the src-geowrite directory.
+
+Building:
+geoDiskFiler was built using geoProgrammer using the included geoWrite source.  It requires the GEOSequates file from the geoModules project:
+https://github.com/bozimmerman/geoModules
+
+
+

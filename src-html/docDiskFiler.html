@@ -1,0 +1,76 @@
+<!DOCTYPE html><html><head><title>Untitled</title></head><body><pre>
+GeoDiskFiler v1.0    
+
+By: Bo Zimmerman
+
+Introduction: 
+The geoDiskFiler is a filename database for Geos whose purpose is the creation, updating, sorting, organizing, and printing of the names of all your programs and disk files. The program will work off of all Geos and CBM disks, as well as any disk drives or printers you may have installed.  When your lists are made, geoDiskFiler stores them in a data file for future updating and access.
+
+Getting Started:
+geoDiskFiler may be started up in one of two ways.  The first way is to double-click on the geoDiskFiler icon, which will load the program into memory and take you to the file options menu discussed below.   The second way is to double click on one of geoDiskFiler's data files.  If a copy of the geoDiskFiler is found on one of the two main disk drives when this is done, geoDiskFiler will be loaded into memory along with the selected data file; the file options menu will be skipped, and the program will take you directly to the work screen.
+
+File Options:
+The first screen which will be brought up following the program initiation method above is the file options menu, similar to those used for many Geos applications.  On the menu box are three option buttons which are selected by clicking on their respective surfaces.  The options operate as described below:
+
+Open:
+If you have already created a data file, and wish to access it again, then this option will give you the choice of selecting which data file on your drive you wish to work from.  If your data file is on another drive, or another disk, then buttons are provided for accessing the correct disk or drive.  If you see your data file within the file menu, it may be selected by highlighting the filename with your pointer and button.  Once selected, the Open button will load the data file in and bring you to the work screen.  The cancel button will take you back to the file options menu.
+
+Create:
+If you wish to create a new data file, then select this option and key in the filename of the data file you wish to create.  Use the disk and drive buttons to select the proper disk for your work.  When the filename is entered, hitting return will create the file and take you to the work screen.  Quit will return you to the file options menu.
+
+Quit:
+This button on the file options menu will return you to the Geos deskTop.
+
+Work Screen:
+When your data file is selected and either loaded or created, the program will create a large shaded box on the left half of the screen.  This will be the file viewing box for when your list is being viewed and edited.  A smaller box created in the upper right hand corner of the screen is the totals box.  At all times, this box will contain a running total of how many filename entries are in your list.  The last set of boxes created at the top of the screen is the work screen menu.  A menu option may be chosen by selecting and pulling down one of the submenus, and then selecting an option off of that submenu.  Each submenu option is explained below:
+
+Disk Filer Info:
+Selecting this option will bring up a simple box containing information regarding the version and author of this program.
+
+Desk Accessories:
+Also under the Geos submenu are the desk accessories found on the disk which geoDiskFiler was booted from.  Selecting one of them will cause the desk accessory to be loaded and executed.  If the desk accessory can not be found on the disk and drive on which it was expected, you may be prompted to re-insert the proper disk back into the drive.
+
+File submenu options:
+
+Close:
+Under the file submenu is the close option.  This will update your data file if neccessary, close the work screen, and take you back to the file options menu discussed above.  
+
+Update:
+Similar to the Close option above, this will save your data file if neccessary (that is, if any changes have been made to the list).  If the disk on which your data file was created or loaded cannot be found in the proper drive, you will be prompted to re-insert that disk.
+
+Rename:
+Performing exactly as you might expect, this option will allow you to change the name of your data file.  When the current name of your data file appears in the text window, simply use the keyboard to change the filename as you see fit.  Hitting return will make your changes permanent.  The cancel button will abort the rename option. 
+
+Recover:
+If you have made changes by mistake, or wish to work off of the last saved copy of your data file, use this option to reload the old version without saving any changes made to the list since.  
+
+Print:
+If your printer is hooked up and turned on, and your printer driver can be found on the disk from which geoDiskFiler was loaded, selecting this option will cause your list to begin printing.  The format will be in two columns, with an 80 column printer expected, and paging options set at the standard line length.
+
+Quit:
+Select this option when you are completely done with your work in geoDiskFiler.  It will perform an update on your data file, saving any changes made if any, close the work screen, and return you to the Geos deskTop.  As in all File submenu options, if the disk on which your data file was created or loaded cannot be found in the proper drive, you will be prompted to re-insert that disk.
+
+Options submenu options:
+
+View:
+The first option under the Options submenu discussed is the view function.  Selecting it will allow you to see all of the entries in your list on the viewing window.  A small options box to the right of the window will allow you to view the next page of list entries, view a previous page of entries, or cancel the viewing option. The data is displayed in two columns, with the filename on the left, and the disk id code in bold on the right.
+
+Sort:
+Choosing this option will cause all of the entries in your list to be placed in alphabetical order.  A text box will appear to inform you that the sorting task has begin, and another will appear to inform you when the sort has been completed.  This version makes use of the fairly quick selection sort method, and is non case-sensitive.
+
+Add:
+The true workhorse of the geoDiskFiler is the add function.  Selecting this option will first bring up a box asking you if you would like to add entries to the list by hand, or read entries off of a disk directory.  If you select the Yes button, you will be adding entries by hand as described below.  If you select the Disk button, you will be adding entires off of a directory.  Select cancel if you do not wish to add entries to you list.
+
+Adding entries by hand:
+A small instructional box will appear first, instructing you on how to inform the system that you have completed your task.  The first option you will be prompted for is the entry id code.  This is a four character identifier for the disk on which your entry's filename can be found.  Not entering a disk id code will abort this session and take you back to the work screen.  When a code is entered and return is pressed, you will next be prompted for the entry filename.  This may be up to 16 characters long.  As in the id code, not entering a filename will abort the session.  So long as entries continue to be made, you will be continuously prompted for more.  The totals box will be updated after each entry.
+
+Adding entries by disk:
+The first task which must be undertaken is the selection of the disk and drive from which to read directory filenames.  Use the Disk and Drive buttons to perform this task; when completed, choose Ok.  After the directory is read, the directory files will be displayed in the viewing window to the left.  Select all files which you would like to add to your list by clicking on them, causing them to become highlighted.  Use the paging keys to examine the entire disk directory.  When you have selected all the entries you wish to add, hit the Ok button.  Now you must enter a disk id code for the entries which are being added from this disk.  Enter the four character code which identifies this disk and press return.  The totals box should become updated at this point as the entries are added to your list.
+
+*** Note!  geoDiskFiler v1.0 only allows 700 filenames for any single data file and list.  Use multiple data files to hold other filenames.
+
+Edit:
+The last selection from the Options submenu is the edit option.  It will bring up a screen similar to the view screen, displaying your list entries within the viewing box on the left.  To edit an entry, highlight a filename by clicking and selecting it.  Next press the Edit button from the small menu on the right.  The entry filename will appear in a text editing box for your changes.  After the filename, another box will allow you to edit the disk id code for that entry.
+
+To delete an entry, highlight one of the filenames as mentioned above, and press the Delete button.  The entry will disappear from the viewing window, and the totals box will be updated.  Press the cancel button when your editing session is complete.
+</pre></body></html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html><html><head><title>Untitled</title></head><body><pre>
+;*************
+; Disk Filer Data
+; Pages 1 and 2
+;*************
+
+.psect
+GText0:	.byte	"geos",0
+GText1:	.byte	"file",0
+GText2:	.byte	"list",0
+GSText0:	.byte	"Disk Filer info",0
+ABtxt1:	.byte	$1a,"GEOS Disk Filer",27,0
+ABtxt2:	.byte	$18,"Version 1.2",27,0
+ABtxt3:	.byte	$18,"Written by: Bo Zimmerman",27,0
+ABtxt4:	.byte	$18,"For: LOADSTAR",27,0
+FText0:	.byte	"close",0
+FText1:	.byte	"update",0
+FText2:	.byte	"rename",0
+FText3:	.byte	"recover",0
+FText4:	.byte	"print",0
+FText5:	.byte	"quit",0
+EText0:	.byte	"add",0
+EText1:	.byte	"view",0
+EText2:	.byte	"edit",0
+EText3:	.byte	"sort",0
+FBtxt0:	.byte	$18,"Please select an option:",27,0
+FBtxt1:	.byte	$18,"new list file",27,0
+FBtxt2:	.byte	$18,"existing file",27,0
+FBtxt3:	.byte	$18,"to deskTop",27,0
+CRtxt1:	.byte	$18,"On Disk:",27,0
+CRtxt2:	.byte	$18,"Please enter new filename:",27,0
+AFTextA:	.byte	$18,"Enter new file name:",27,0		
+CDtxt1:	.byte	$18,"Insert new disk into disk drive.",27,0
+ERtxt0:	.byte	$18,"ERROR: File exists!",27,0
+ERtxt1:	.byte	$18,"ERROR: Disk full!",27,0
+ERtxt2:	.byte	$18,"ERROR: File not found!",27,0
+ERtxt3:	.byte	$18,"ERROR: File too long!",27,0
+ERtxt4:	.byte	$18,"ERROR: Device not present!",27,0
+ERtxt5:	.byte	$18,"ERROR: Write protect on!",27,0
+ERtxt6:	.byte	$18,"ERROR: Read error!",27,0
+ERtxt7:	.byte	$18,"ERROR: Write error!",27,0
+ERtxt8:	.byte	$18,"ERROR: Disk error!",27,0
+DMtxt1:	.byte	$18,"Please insert disk:",27,0
+DMtxt2:	.byte	$18,"Into drive: ",27,0
+FAtxt1:	.byte	$18,"Add entries by hand?",27,0
+FAtxt2:	.byte	$1b,"Yes, key in entries.",27,0
+FAtxt3:	.byte	$1b,"No, open a disk.",27,0
+FAtxt4:	.byte	$1b,"Don't add entries.",27,0
+IDTextA:	.byte	$18,"Enter ID code:",27,0
+Spaces:	.byte	"  ",0
+MISCtxt1:	.byte	$18,"List is empty.",27,0
+SOtxt1:	.byte	$18,"Sort complete.",27,0
+BTtxt1:	.byte	$18,"Sorry, memory near full.",27,0
+ADtxtA:	.byte	$18,"Open disk:",27,0
+ADtxtB:	.byte	$18,"No files on this disk!",27,0
+ADtxt1:	.byte	$18,"Select filenames to",27,0
+ADtxt2:	.byte	$18,"add to your list.",27,0
+ADtxt3:	.byte	$1b,"add items",27,0
+ADtxt4:	.byte	$1b,"don't add",27,0
+PRtxtA:	.byte	$18,"Printer inaccessible.",27,0
+
+;** Information sector for Data files.
+DataHeader:
+	.word	FileNm
+	.byte	$03,$15,$bf
+	.byte	$ff,$ff,$ff,$80,$00,$01,$87,$80
+	.byte	$01,$88,$40,$01,$8f,$ff,$f1,$88
+	.byte	$00,$11,$88,$00,$21,$88,$18,$21
+	.byte	$88,$24,$11,$88,$24,$11,$88,$18
+	.byte	$11,$88,$00,$11,$88,$18,$11,$88
+	.byte	$18,$11,$8f,$ff,$f1,$80,$00,$01
+	.byte	$80,$00,$01,$80,$00,$01,$80,$00
+	.byte	$01,$80,$00,$01,$ff,$ff,$ff
+	.byte	$83
+	.byte	APPL_DATA
+	.byte	SEQUENTIAL
+	.word	DataStart
+DataEnd:	.word	DataStart
+	.word	0
+PermNm:	.byte	"DiskFiler Data",0,0,0,0,0,$00
+	.byte	"Bo Zimmerman",0,0,0,0,0,0,0,0
+	.byte	"geoDiskFiler 1.2",0,0,0,$00
+Zeroes:	.block	160-117
+</pre></body></html>

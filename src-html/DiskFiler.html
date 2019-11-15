@@ -1,0 +1,2091 @@
+<!DOCTYPE html><html><head><title>Untitled</title></head><body><pre>
+;************************
+;*        Geos Disk Filer
+;*
+;*        God Help Me
+;************************
+
+.if	Pass1
+	.include	GEOSequates
+.endif
+
+.psect
+
+;Page  Routine    Description           Routine    Description                   
+;  3	ProgStart	Start of main program	AutoFile	Handles startup data files
+;  4	FirstBox	Opening box routine	FstDbox	First box data
+;	Creacon	Create image data	Quicon	Quit image data 
+;  5	IntroBox	Little openin box on bot.	ClrlBox	Clear the little box
+;	Quitrtn	Handle fstbox quit	CretRtn	Calls DoCreate
+;  6	DoOpenF	Handle open file box	OpData	Data for open file box
+;	Drvcon	Drive icon image
+;  7	OpenSelect	Click on filename box	CheckClick	Finds filenames clicked on
+;  8	DoCreate	Create a new file rtine	CRbox	Create box data, Drvcon2 also
+;  9	SwitchDrive	Go to other drives	MoveDrName	To pointed to buffer
+;	ChgDisk	Open a new disk	CDbox	Prompt cd box
+;  10	CloseFile	Set Save Drive, etc...	LoadFile	Loads FileNm name
+;	MoveHead	Puts header into buffer	DriveLetter	Figgers it and returns it
+;  11	DoDrvM	Makes sure drive is right	RightDisk	Data for DoDrvM swap prompt
+;  12	DFerrors	Show file errors	Opfigger	Load selected file from DoOpen
+;  13	ValCreate	Make sure Create file OK	Can,OKBox	Cancel box, OKbox also
+;  14	ClearScreen	Data to do so	MenuTable	Main menu data
+;  15	GeosSubMenu	Data for this menu
+;  16	FileSubMenu	Data for this menu
+;  17	ListSubMenu	Data for this menu
+;  18	InitDA	Initial DA pnters + info set
+;  19	R_DoAbout	Routine for info box	Ab_Box	Data for info box
+;	R_DoNothing	Does nothing	R_DoQuit	Exits program
+;	R_DoClose	Saves and quits	R_RunDA	Calls RunDA routine
+;	R_DoUpdate	Resaves work file	R_DoRecover	Reloads work file
+;  20	R_DoRename	Renames the work file	RenBox	Prompt box for rename
+;  21	R_DoAdd	General add select rtine	FstABox	Data box to select add medium
+;	ABYHND	Add by hand routine	ABHBox	Data box to do add by hand
+;  22	ABYText	Add by hand instr data	ClrABY	Clears that box
+;	ABYtxt	Rtine which calls boxes
+;  23	GetID	Gets ID input for new file	AIDBox	Data box for ID prompt
+;	Off_Add	Sets pters for new entry	ClrNxtSp	Clears new space for entry
+;  24	BuildTable	Reads ABD fnames	ABDbox	Data box for which ABD disk
+;  25	ABYDisk	Add by disk routine
+;  26	InvSup	Sets fname outline ptrs	InvDo	Inverts fname in window
+;	ADbox2	Instruction data ABD boxs
+;  27	ChkInv	Chks for clicked fnames	AddSelections	Adds ABD fnames to main list
+;  28	PgUpDn	Page up down box data	Up,Dncon	Up down images
+;	DoPgUp	Perform page up rtine	DoPgDn	Perform page down
+;  29	R_DoView	Does viewing routine	DisplPg	Generic page display, DispNPg
+;  30	R_DoSort	Does sort	SoSwap	Swaps two filenames
+;  31	IsLess	Compares entries	MkUpp	Makes a lowercase letter
+;  32	EdDlBox	Edit delete box data	Ed,Del con	Images for Edit/Del icons
+;  33	R_DoEdit	Calls Edit w/EdClk proc	FindAdd	Finds next pointer to filename
+;  34	DoDel	Does deletion routine	DoEdit	Does edit w/DOEdit helping
+;  35	PrtNum	Prints a number
+;  36	R_DoPrint	Prints list? More?
+;  37	InitScreen	W/Mainscreen data/Clr	CtBox	Updates count box
+;  38	RunDA	Performs DA execution
+;  39	Misc	All data pointers and such
+
+;******************
+;  Start of main driver
+;******************
+
+	ABDBUF = $6000	;Add by disk filenames buffer
+
+ProgStart:
+	ldb	SaveFlag,#$00	;Clear whether file is saved
+	ldb	dispBufferOn,#(ST_WR_FORE|ST_WR_BACK)
+		;allows writes to foreground AND background
+	jsr	InitDA	;Read Desk Accessory names
+
+Begin:	ldw	R0,#ClearScreen	;Clear screen
+	jsr	GraphicsString
+
+	jsr	AutoFile
+	bne	12$
+	jsr	FirstBox	;Bring up Open/Create/Quit box
+
+12$:	jsr	InitScreen	;Put up files and total box
+
+	ldw	R0,#MenuTable	;Set up main menu
+	lda	#0
+	jsr	DoMenu	;Run the program
+	rts
+
+AutoFile:	lda	dataFileNm	;Autofile previously read in?
+	beq	15$	;Yep, so abort.
+	sta	TempV	;Save this for when its zapped
+	ldb	$8403,#$00	;Flag to see if the file is found.
+	ldw	R6,#dataFileNm	;Look for the filename
+	jsr	FindFile	;Check this drive 1st
+	cbi	$8403,#$00
+	bne	13$	;Found her!
+	jsr	DoSwitch	;Try to switch to other drive
+	cpx	#$00
+	bne	15$	;No error in switch, continue
+12$:	mvb	TempV,dataFileNm	;Restore zapped filename
+	ldw	R6,#dataFileNm
+	jsr	FindFile	;Try other drive now
+	cbi	$8403,#$00
+	beq	15$	;Not there either.. abort
+13$:	ldw	R9,#$8400
+	jsr	GetFHdrInfo	;Now get header of file found
+	ldw	A0,#$814d
+	ldw	A1,#PermNm	;Is it the proper type?
+	ldx	#A0
+	ldy	#A1
+	jsr	CmpString
+	bne	15$	;Nope, so abort.
+14$:	ldw	A3,#dataFileNm
+	jsr	OpenUp	;Read in the file.
+	bne	15$
+	lda	#$00
+	sta	dataFileNm	;Never ever check again.
+	lda	#$01	;Done
+	rts
+15$:	lda	DADrive
+	jsr	SetDevice
+	jsr	OpenDisk
+	lda	#$00	;Aborted
+	sta	dataFileNm	;Never again check!
+	rts
+
+;********************
+;*  The opening box
+;********************
+
+FirstBox:	ldw	R0,#IntroBox	;Put little text box in
+	jsr	GraphicsString
+	ldw	R0,#FstDbox	;Open Create/Open/Quit box
+	jsr	DoDlgBox
+	ldw	R0,#ClrIBox	;Clear little text box
+	jsr	GraphicsString
+	lda	sysDBData
+	bne 	11$
+	jmp	EnterDeskTop	;Quit Click box
+11$:	cmp	#$0f
+	bne	12$
+	jmp	DoCreate	;Do Create routines
+12$:	jmp	DoOpenF	;Do Open routines
+
+FstDbox:	.byte	$80 | $01
+	.byte	11	;add text
+	.byte	$16,$13
+	.word	FBtxt0
+	.byte	$05,$02,$32	;OPEN icon
+	.byte	18	;user icon
+	.byte	$02,$1c
+	.word	Creacon
+	.byte	18	;user icon
+	.byte	$02,$49
+	.word	Quicon
+	.byte	11	;add text
+	.byte	$46,$26
+	.word	FBtxt1
+	.byte	11	;add text
+	.byte	$46,$3e
+	.word	FBtxt2
+	.byte	11	;add text
+	.byte	$46,$53
+	.word	FBtxt3
+	.byte	0	;end of defintion
+Creacon:
+	.word	Creamage	;graphic location
+	.word	0	;leave this at 0
+	.byte	FCwid	;width, set below
+	.byte	FChit	;height, set below
+	.word	CreatRtn	;location of action routine
+Creamage:
+<img src="00065.png" />
+	FCwid	=picW
+	FChit	=picH
+Quicon:
+	.word	Quimage	;graphic location
+	.word	0	;leave this at 0
+	.byte	FQwid	;width, set below
+	.byte	FQhit	;height, set below
+	.word	QuitRtn	;location of action routine
+Quimage:
+<img src="00066.png" />
+	FQwid	=picW
+	FQhit	=picH
+
+;**************
+;  Misc Firstbox
+;     Routines
+;**************
+
+IntroBox:
+	.byte	$05	;Set pattern
+	.byte	$00	;Clear pattern
+	.byte	$01	;Set position
+	.word	100	;  Xpos
+	.byte	145	;  Ypos
+	.byte	$07	;Make outline
+	.word	225	;  Xpos
+	.byte	185	;  Ypos
+	.byte	$01	;Set fill position
+	.word	101	;   Xpos
+	.byte	146	;   Ypos
+	.byte	$03	;Fill in box
+	.word	224	;   Xpos
+	.byte	184	;   Ypos
+	.byte	$06	;First Text line
+	.word	115	;   Xpos
+	.byte	167	;   Ypos
+	.byte	$18," - geoDiskFiler - ",27,0
+	.byte	$00	;End intro box
+
+ClrIBox:	.byte	$05	;Set pattern
+	.byte	$02	;Clear pattern
+	.byte	$01	;Set position
+	.word	100	;  Xpos
+	.byte	145	;  Ypos
+	.byte	$03	;Fill in box
+	.word	225	;   Xpos
+	.byte	185	;   Ypos
+	.byte	$00	;End intro box
+
+QuitRtn:	ldb	sysDBData,#$00	;Clear response, exit
+	jmp	RstrFrmDialogue
+
+CreatRtn:	ldb	sysDBData,#$0f	;Set Create response, exit
+	jmp	RstrFrmDialogue
+
+
+;**********************
+;*  Open existing file
+;**********************
+
+DoOpenF:
+	ldw	TempS,#$3024	
+	ldw	$885b,#$00
+55$:	ldb	A2L,#11	;Set up filename variables
+	ldw	A1,#DiskNm	;Set disk name pointer
+	jsr	MoveDrNm
+	ldw	R10,#PermNm	;Permanent filename
+	ldw	R5,#FileNm	;Filename location
+	ldb	R7L,#APPL_DATA	;Type of file
+	ldw	R0,#OpData	;Opening box
+	jsr	DoDlgBox
+	cbi	sysDBData,$00	;Was any click hit?
+	beq	55$
+	cmp	#$02	;Was cancel hit?
+	bne	22$
+21$:	jmp	FirstBox
+22$:	cmp	#$06	;Change disks?
+	bne	23$
+	jsr	ChgDisk
+	bne	21$	;A change disk error?
+	bra	55$
+23$:	cmp	#$05	;Miscellaneous click boxes?
+	bne	44$
+	jsr	OpFigger	;Read in the file!
+	bne	21$
+44$:	rts
+
+OpData:	.byte	$80 | $01
+	.byte	16	;getFiles
+	.byte	$06,$03	;XOffset, YOffset
+	.byte	11
+	.byte	$84,$09
+	.word	CRtxt1
+	.byte	12
+	.byte	$84,$13
+	.byte	A1
+	.byte	$05,$11,$16	;OPEN icon
+	.byte	$02,$11,$4c	;Cancel icon
+	.byte	18	;user icon
+	.byte	$11,$28
+	.word	Drvcon
+	.byte	$06,$11,$3a	;DISK icon
+	.byte	17	;Routine on Click
+	.word	OpenSelect	;routine to execute on otherPress
+	.byte	0	;end of defintion
+Drvcon:
+	.word	Drvmage	;graphic location
+	.word	0	;leave this at 0
+	.byte	DIconW	;width
+	.byte	DIconH	;height
+	.word	SwitchDrive	;location of action routine
+Drvmage:
+<img src="00064.png" />
+	DIconW	=picW
+	DIconH	=picH
+
+
+
+;******************
+;  Open Box Routines
+;******************
+
+OpenSelect:	;This routine handles clicks in the filename box
+	lda	mouseData	;Was button pressed?
+	bmi	94$
+	jsr	CheckClick	;Check all filenames for click
+	cmp	#$ff
+	beq	94$	;No filename was selected
+	clc
+	adc	$885b
+	sta	Temp	;Save new filename index
+	lda	$885c
+	sec
+	sbc	$885b	;Find old screen index
+	tax
+	lda	ClkCht,x	;Calculate old screen index
+	sta	R2L
+	clc
+	adc	#$0c
+	sta	R2H
+	jsr	InvertRectangle	;Un-invert old choice
+	mvw	Temp,$885c	;Save new index
+94$:	rts
+
+
+CheckClick:	;This routine finds which filename is clicked on
+	ldb	A0L,#$00	;Set temporary index
+92$:	ldx	A0L
+	lda	ClkCht,x	;Calculate filename box dimen.
+	sta	R2L	;Top
+	clc
+	adc	#$0c
+	sta	R2H	;Bottom
+	ldw	R3,#$0047	;Now set left
+	ldw	R4,#$00c1	;  and right
+	jsr	IsMseInRegion
+	cmp	#$ff	;Click was not on that filename
+	bne	93$
+	jsr	InvertRectangle	;If it was, invert the filename
+	lda	A0L
+	rts		;and exit
+93$:	inc	A0L
+	lda	A0L
+	cbi	A0L,#$05	;Otherwise go back and check
+	bne	92$	;  the rest.
+	lda	#$ff
+	rts
+
+ClkCht:	.byte	$24,$32,$40,$4e,$5c,$6a
+	;Chart for calculating the top and bottom scanlines
+
+;**********************
+;*  Create a new file
+;**********************
+
+DoCreate:
+	ldb	A2L,#18	;Move cur drive name to pos
+	ldw	A1,#DiskNm
+	jsr	MoveDrNm
+	ldw	R0,#CRbox	;Now perform actual dialog box
+	ldw	A2,#FileNm
+	jsr	DoDlgBox
+	cbi	sysDBData,#$02	;Was cancel hit?
+	bne	15$
+14$:	jmp	FirstBox	;Back to start
+15$:	cmp	#$06	;Change disks
+	bne	16$
+	jsr	ChgDisk
+	bne	14$	;A change disk error?
+	jmp	DoCreate
+16$:	cmp	#$0d	;If other than filename, repeat
+	bne	DoCreate
+	cbi	FileNm,#$00
+	beq	14$
+	jsr	ValCreate	;Check file to create
+	bne	14$
+	ldw	NumFiles,#$00	;Initialize data values
+	ldw	DataEnd,#DataStart+3
+	mvb	curDrive,FileDrive	;Save drive of opened file
+	ldb	A2L,#18
+	ldw	A1,#FileDrive+1	;Save disk name
+	jsr	MoveDrNm
+	ldb	SaveFlag,#$01	;Create the file
+	jmp	CloseFile
+
+CRbox:	.byte	$80 | $01
+	.byte	11	;add text
+	.byte	$16,$11
+	.word	CRtxt1
+	.byte	12
+	.byte	$43,$11
+	.byte	A1
+	.byte	11	;add text
+	.byte	$16,$22
+	.word	CRtxt2
+	.byte	18	;user icon
+	.byte	$09,$47
+	.word	Drvcon2
+	.byte	$02,$10,$47	;Cancel icon
+	.byte	$06,$02,$47	;DISK icon
+	.byte	13	;GetString
+	.byte	$16,$33	;XOffset.Yalso
+	.byte	A2	
+	.byte	18	;maximum # of chars to accept.
+	.byte	0	;end of defintion
+Drvcon2:
+	.word	Drvmage	;graphic location
+	.word	0	;leave this at 0
+	.byte	DIconW	;width, set below
+	.byte	DIconH	;height, set below
+	.word	SwitchDrive	;location of action routine
+
+
+;***************************
+;   Toggle Drives, Move Filename
+;***************************
+
+SwitchDrive:
+	jsr	DoSwitch
+	cpx	#$00	;Check for error!
+	beq	21$
+	jsr	DoSwitch
+	ldb	sysDBData,#$02	;Error detected, return abort!
+	jmp	RstrFrmDialog
+21$:	jmp	QuitRtn	;No error, jump back
+
+DoSwitch:
+	ldx	#$08
+	lda	numDrives
+	add	#7
+	cmp	curDrive
+	ble	20$
+	ldx	curDrive	
+	inx
+20$:	txa
+	pha
+	jsr	SetDevice
+	pla
+	cmp	curDrive
+	beq	21$
+	sta	curDrive
+	bra	DoSwitch
+21$:	jsr	OpenDisk
+	cpx	#0
+	bne	DoSwitch
+	rts
+
+MoveDrNm:
+	ldx	#A0	;Discover the current drives
+	jsr	GetPtrCurDkNm	;name. Should this be a routine?
+	ldy	#$00
+17$:	lda	(A0),y	;Copy Disk Name to Buffer...
+	cmp	#$a0	;so that a 0 can be added
+	beq	18$	;and thus be readable by
+	sta	(A1),y	;the dialog box routines
+	iny		
+	cmp	#$a0	
+	beq	18$
+	cpy	A2L
+	bne	17$
+18$:	lda	#0	;Now add EOL to end
+	sta	(A1),y
+	rts
+
+ChgDisk:
+	ldw	R0,#CDbox	;Handle swap disk box
+	jsr	DoDlgBox
+	jsr	OpenDisk	;Open new disk
+	jmp	DFerrors	;Check for errors
+
+CDbox:
+	.byte	$80 | $01
+	.byte	11	;add text
+	.byte	$0e,$12
+	.word	CDtxt1
+	.byte	$01,$0f,$42	;OK icon
+	.byte	0	;end of defintion
+
+
+;*******************
+; Handle file Loads,
+;  Saves, and New Files
+;   Find Curr Drive Letter
+;*******************
+
+CloseFile::	lda	SaveFlag
+	beq	15$
+	ldw	A3,#FileDrive
+	jsr	DoDrvM	;Set Save Drive
+	bne	15$
+	ldw	R0,#FileNm
+	mvw	R0,DataHeader	;Update filename in header
+	jsr	DeleteFile	;Erase old file
+	ldw	R9,#DataHeader
+	ldb	R10L,#0
+	ldb	SaveFlag,#$00	;Re-clear save flag
+	jsr	SaveFile	;Save new file
+	jsr	DFerrors	;Handle errors
+15$:	rts
+
+LoadFile:	ldb	R0L,#$00	;Set up Load Code
+	ldw	R6,#FileNm
+	jsr	GetFile	;Read old file
+	jmp	DFerrors	;Handle errors
+
+MoveHead:
+	ldw	A0,#DataHeader	;Copy new header block
+	ldw	A1,#$8100
+	lda	#$ff
+	ldx	#A1
+	ldy	#A0
+	jmp	CopyFString
+
+DriveLetter:	;Returns drive letter, current open drive, in Temp
+	ldb	Temp,#'A'	;Assume it's A
+	ldb	Temp+1,#$00
+	ldx	#A5
+	jsr	GetPtrCurDkNm	;Get Drive Name
+	ldw	A6,#DrACurDkNm
+	ldy #18
+33$:	dey		;Compare names
+	beq	34$
+	lda	(A5),y
+	cmp	(A6),y
+	beq	33$
+	ldb	Temp,#'B'	;Was B
+34$:	rts	
+
+	
+
+;******************
+;     Save Drives,
+;  Handle Drive Swaps
+;******************
+
+DoDrvM:		;Make sure correct disk for Drive A3L is in.
+	ldy 	#$00	;Set current drive proper
+	lda	(A3),y
+	jsr	SetDevice
+	mvw	A3,A4	;Copy filename ptr to A4
+	avw	#$01,A4	;Make sure filename is pointed
+	ldw	A1,#DiskNm	;DiskNm is dest for disk name
+	ldb	A2L,#18	;18 chars max
+	jsr	MoveDrNm
+	ldx	#A4	;Now compare A4 to A1
+	ldy	#A1
+	jsr	CmpString
+	beq	39$
+	ldw	R0,#RightDisk	;Not equal, so send box
+	ldw	A2,#Temp
+	jsr	DriveLetter	;Find drive letter
+	jsr	DoDlgBox
+	jsr	OpenDisk	;Re-open the drive
+	lda	sysDBData
+	cmp	#$02	;If cancelled then cancel!
+	bne	DoDrvM
+	lda	#$ff	;Send error
+	rts
+39$:	lda	#$00	;Successfull and done
+	rts
+
+RightDisk:	.byte	$80 | $01
+	.byte	$01,$04,$46	;OK icon
+	.byte	$02,$0e,$46	;Cancel icon
+	.byte	11	;add text
+	.byte	$1b,$11
+	.word	DMtxt1
+	.byte	12	;add text
+	.byte	$1a,$21
+	.byte	A4
+	.byte	11	;add text
+	.byte	$1b,$35
+	.word	DMtxt2
+	.byte	12	;add text
+	.byte	$5a,$35
+	.byte	A2
+	.byte	0	;end of defintion
+
+
+;*****************
+;  Handle Disk Errors
+;  Figure Load FName
+;*****************
+
+DFerrors:	stx	A4L	;Save error code
+	cpx	#$00	;Was there an error?
+	beq	99$	;If not, exit
+	ldy #$00
+97$:	lda	ERcht,y	;Check chart for valid errors
+	cmp	A4L
+	bne	98$
+	lda	ERcht+1,y	;Now find address of error
+	sta	A5L	;   text string
+	lda	ERcht+2,y
+	sta	A5H
+	bra	54$
+98$:	iny		;Increment error chart counter
+	iny		;  for another run
+	iny
+	cpy	#$15	;Seven total valid errors
+	bne	97$
+	ldw	A5,#ERtxt8	;No valid error, so use Disk Error
+	ldw	R0,#CanBox
+54$:	jsr	DoDlgBox	;Now open error window 
+	lda	#$ff	;Send back error code
+	rts
+99$:	lda	#$00	;Send back no error
+	rts
+
+ERcht:	.byte	3	;Error codes, and pointer to 
+	.word	ERtxt1	;their descriptors.
+	.byte	5
+	.word	ERtxt2	;If adding a code, remember
+	.byte	11	;to set counter as there is
+	.word	ERtxt3	;no table delimeter
+	.byte	13
+	.word	ERtxt4
+	.byte	31
+	.word	ERtxt5
+	.byte	32
+	.word	ERtxt6
+	.byte	39
+	.word	ERtxt7
+
+OpFigger:	ldw	A3,#$8300	;Set start of filename grid
+	ldx	$885c	;Find filename index
+	bne	12$	;If first filename, your done!
+	jmp	OpenUp
+12$:	avw	#$11,A3	;Otherwise go to next filename
+	dex
+	bne	12$	;Keep on to fname index 
+OpenUp:	ldy 	#$00		;Now move filename 
+14$:	lda	(A3),y	;   onto valid position
+	sta	FileNm,y
+	iny
+	cpy	#$11	;Up to max 17 characters
+	bne	14$
+	lda	#$00	;Then set EOL character as last
+	sta	FileNm,y
+	jsr	LoadFile	;Go load in the file
+	bne	15$
+	jsr	MoveHead	;Move new files header to buf
+	mvb	curDrive,FileDrive	;Save drive of opened file
+	ldb	A2L,#18
+	ldw	A1,#FileDrive+1	;Save disk name
+	jsr	MoveDrNm
+15$:	rts
+
+;****************
+;  Count blocks Box
+;   OK box
+;     CANCEL box
+;****************
+
+ValCreate:
+	jsr	GetDirHead	;Get BAM into memory
+	ldw	R5,#$8200	;Point to BAM
+	jsr	CalcBlksFree	
+	lda	R4H
+	bne	11$
+	lda	R4L
+	cmp	#$14	;20 blocks minimum
+	bcs	11$
+	ldw	A5,#ERtxt1	;Not enough blocks
+10$:	ldw	R0,#CanBox
+	jsr	DoDlgBox	;Whine and exit
+	lda	#$ff
+	rts
+11$:	ldb	$886e,#$ff	;Check for file existance
+	ldw	R6,#FileNm
+	jsr	FindFile
+	cpx	#$05	;This or that error?
+	beq	13$
+	cpx	#$00
+	bne	12$
+	ldw	A5,#ERtxt0
+	bra	10$
+12$:	jmp	DFerrors	;Check for other errors
+13$:	lda	#$00
+	rts		;Enough blocks
+
+CanBox:
+	.byte	$80 | $01
+	.byte	12	;add text
+	.byte	$20,$1b
+	.byte	A5
+	.byte	$02,$0f,$40	;Cancel icon
+	.byte	0	;end of defintion
+
+OKBox:
+	.byte	$80 | $01
+	.byte	12	;add text
+	.byte	$20,$1b
+	.byte	A5
+	.byte	$01,$0f,$40	;Ok icon
+	.byte	0	;end of defintion
+
+;******************
+;    Data for Clearing
+; Screen and Main Menu
+;******************
+
+ClearScreen:		;Clear whole dad gummed screen
+	.byte	NEWPATTERN,2
+	.byte	MOVEPENTO
+	.word	0
+	.byte	0
+	.byte	RECTANGLETO
+	.word	319
+	.byte	199
+	.byte	0
+
+MenuTable:
+	.byte	0	;top
+	.byte	14	;bottom
+	.word	0	;left
+	.word	65	;right
+	.byte	3|HORIZONTAL	;# items, and menu type
+
+	.word	GText0	;Here be the text
+	.byte	VERTICAL	;type of sub menu
+	.word	GeosSubMenu	;Sub menu structure
+
+	.word	GText1
+	.byte	VERTICAL
+	.word	FileSubMenu	
+
+	.word	GText2
+	.byte	VERTICAL
+	.word	ListSubMenu
+
+ClearPatch:	;Clear little $6000 patch during Add By Disks.
+	.byte	NEWPATTERN,2
+	.byte	MOVEPENTO
+	.word	$0a0	;$0a7
+	.byte	$34	;$34
+	.byte	RECTANGLETO
+	.word	$127	;$11c
+	.byte	$90	;$b5
+	.byte	0
+
+;*****************
+;  Data for GEOS sub
+;   menu and DA's
+;*****************
+
+GeosSubMenu:
+	;The sub menu under the "geos" thang
+	.byte	15	;top scanline
+	.byte	15+1+(1*14)	;bottom scanline,15+1+(#items*14)
+	.word	0	;left x position
+	.word	79	;right x position
+	.byte	VERTICAL|1	;# of items (if no DA's)
+
+	.word	GSText0	;text for this item
+	.byte	MENU_ACTION
+	.word	R_DoAbout
+
+	.word	DAText
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$11
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$22
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$33
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$44
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$55
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$66
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+	.word	DAText+$77
+	.byte	MENU_ACTION
+	.word	R_RunDA
+
+
+;***************
+; Data for File menu
+;***************
+
+FileSubMenu:
+	.byte	15
+	.byte	15+1+(6*14)	;2= # menu items
+	.word	29
+	.word	29+40
+	.byte	VERTICAL|6
+
+	.word	FText0	;Close a file
+	.byte	MENU_ACTION
+	.word	R_DoClose
+
+	.word	FText1	;Update a file
+	.byte	MENU_ACTION
+	.word	R_DoUpdate
+
+	.word	FText2	;Rename file
+	.byte	MENU_ACTION
+	.word	R_DoRename
+
+	.word	FText3	;Recover file
+	.byte	MENU_ACTION
+	.word	R_DoRecover
+
+	.word	FText4	;Print file
+	.byte	MENU_ACTION
+	.word	R_DoPrint
+
+	.word	FText5	;Quit and Save
+	.byte	MENU_ACTION
+	.word	R_DoQuit
+
+
+
+;****************
+;    Data for List
+;       Menu
+;****************
+
+ListSubMenu:
+	.byte	15
+	.byte	15+1+(4*14)
+	.word	49
+	.word	49+29
+	.byte	VERTICAL|4
+
+	.word	EText0	;add entries
+	.byte	MENU_ACTION
+	.word	R_DoAdd
+
+	.word	EText1	;view list
+	.byte	MENU_ACTION
+	.word	R_DoView
+
+	.word	EText2	;edit list
+	.byte	MENU_ACTION
+	.word	R_DoEdit
+
+	.word	EText3	;sort list
+	.byte	MENU_ACTION
+	.word	R_DoSort
+
+
+;**************
+;  Desk Accessory
+;    Drive Check
+;**************
+
+InitDA:	;** Setup the menu data tables for Desk Accessories
+	mvb	curDrive,DADrive	;Save drive of opened drive
+	ldb	A2L,#18
+	ldw	A1,#DADrive+1	;Save disk name
+	jsr	MoveDrNm
+	ldw	R6,#DAText
+	ldb	R7L,#DESK_ACC
+	ldb	R7H,#7	;# of DAs
+	ldw	R10,#0
+	jsr 	FindFTypes	;Use FindFtypes to set up D.A.s
+	lda	#7	;max 7 DAs - number found
+	sub	R7H
+	beq	90$	;if there are none, exit
+	clc
+	adc	#1	;add 1 for info option
+	pha
+	ora	#VERTICAL
+	sta	GeosSubMenu+6	;set up new # of menu options
+	pla
+	sta 	R0L	;recalculate height of menu
+	asl	a
+	asl	a
+	asl	a
+	asl	a
+	sub	R0L
+	sub	R0L
+	clc
+	adc	#16	;Bottom scanline +2
+	sta	GeosSubMenu+1
+90$:	rts
+
+
+;****************
+;   Handle Info box, 
+;   Close, Quit, DA's
+;  and other File stuff.
+;****************
+
+R_DoAbout:
+	jsr	GotoFirstMenu	;roll up menu
+	ldw	R0,#Ab_Box
+	jsr	DoDlgBox
+	rts
+
+Ab_Box:	.byte	$80 | $01
+	.byte	11	;add text
+	.byte	$2e,$14
+	.word	ABtxt1
+	.byte	11	;add text
+	.byte	$3f,$28
+	.word	ABtxt2
+	.byte	11	;add text
+	.byte	$16,$3f
+	.word	ABtxt3
+	.byte	11	;add text
+	.byte	$35,$52
+	.word	ABtxt4
+	.byte	14	;Quit on Click
+	.byte	0	;end of defintion
+
+R_DoNothing:
+	jsr	GotoFirstMenu
+	;Nothing Done!
+	rts
+
+R_DoQuit:
+	jsr	GotoFirstMenu
+	jsr	CloseFile	;Save file and exit
+	jmp	EnterDeskTop
+
+R_DoClose:
+	jsr	GotoFirstMenu
+	jsr	CloseFile	;Just save file and start over
+	jmp	Begin
+
+R_RunDA:
+	pha
+	jsr	GotoFirstMenu
+	pla
+	jsr	RunDA
+	rts
+
+R_DoUpdate:
+	jsr	GotoFirstMenu	;roll up menu
+	jsr	CloseFile
+	rts
+
+R_DoRecover:
+	jsr	GotoFirstMenu	;roll up menu
+	ldw	A3,#FileDrive
+	jsr	DoDrvM	;Re-load the file
+	bne	33$
+	jsr	LoadFile
+	jsr	MoveHead
+	jsr	UpDtTot
+33$:	rts
+
+
+;*****************
+;  Handle Rename,
+;     and Print
+;    (eventually)
+;*****************
+
+R_DoRename:
+	jsr	GotoFirstMenu	;roll up menu
+	ldw	A3,#FileDrive
+	jsr	DoDrvM	;Insure correct disk
+	bne	60$
+	ldw	R6,#Temp	;Open rename box
+	ldw	R0,#RenBox
+	jsr	DoDlgBox
+	cbi	Temp,#$00	;Was anything entered?
+	beq	60$
+	cbi	sysDBData,#$02	;Cancel?
+	beq	60$
+	lda	FileDrive	;Re-Reset drive
+	jsr	SetDevice
+	ldw	R0,#Temp	;Try to rename on disk
+	ldw	R6,#FileNm
+	jsr	RenameFile
+	cpx	#$05	;File not found error is ok
+	beq	70$
+	cpx	#$00	;So is no error
+	beq	70$
+	jmp	DFerrors	;Handle all other errors
+70$:	ldw	R0,#Temp	;Why this redundancy?
+	ldw	R6,#FileNm
+	ldy	#R6	;Copy new filename
+	ldx	#R0
+	jsr	CopyString
+60$:	rts
+
+RenBox:	.byte	$80 | $01
+	.byte	11	;add text
+	.byte	$10,$18
+	.word	CRtxt2
+	.byte	13	;GetString
+	.byte	$1c	;XOffset
+	.byte	$23	;YOffset
+	.byte	R6	;gives r# to contain pntr to text buffer. 5-10
+	.byte	16	;maximum # of chars to accept.
+	.byte	$02,$0e,$42	;Cancel icon
+	.byte	0	;end of defintion	
+
+
+;****************
+;  General Add Box
+;  For Menu Routine
+;****************
+
+R_DoAdd:
+	jsr	GotoFirstMenu
+	cwi	NumFiles,#712	;Space remaining?
+	bne	11$
+	ldw	A5,#BTtxt1	;If not, whine and exit
+	ldw	R0,#CanBox
+	jmp	DoDlgBox	;Send Table Build CANCEL!
+11$:	ldw	R0,#FstABox
+	jsr	DoDlgBox
+	cbi	sysDBData,#$02	;Cancel
+	beq	29$
+	cmp	#$03
+	bne	28$
+	jmp	ABYHND	;Add by hand
+28$:	jmp	ABYDISK		;Add by disk
+29$:	rts
+
+FstABox:	.byte	$80 | $01
+	.byte	11	;add text
+	.byte	$10,$13
+	.word	FAtxt1
+	.byte	$03,$02,$1d	;Yes icon
+	.byte	$02,$02,$47	;Cancel icon
+	.byte	$04,$02,$32	;NO icon
+	.byte	11	;add text
+	.byte	$4c,$28
+	.word	FAtxt2
+	.byte	11	;add text
+	.byte	$4c,$3e
+	.word	FAtxt3
+	.byte	11	;add text
+	.byte	$4c,$53
+	.word	FAtxt4
+	.byte	0	;end of defintion
+
+ABYHND:	jsr	ABYtxt	;Put up instructions
+90$:	jsr	ClrNxtSp	;Clear next space in memory
+	jsr	GetID	;Get the ID number in
+	beq	99$	;If no ID entered, abort
+	mvw	DataEnd,A3	;Set position for next entry
+	ldw	R0,#ABHBox
+	jsr	DoDlgBox	;Get next entry
+	ldy	#$00	;Anything typed?
+	lda	(A3),y
+	beq	99$
+	jsr	Off_Add	;If so, add it	
+	beq	90$
+99$:	ldw	R0,#ClrABY	;Clear instr and exit
+	jsr	GraphicsString
+	rts
+
+ABHBox:	.byte	$00 | 01	;user position
+	.byte	$7e,$af	;top, bottom
+	.word	$a0,$133	;left, right
+	.byte	11	;add text
+	.byte	$08,$10
+	.word	AFTextA
+	.byte	13	;GetString
+	.byte	$0c,$19	;XOffset,YOffset
+	.byte	A3	;gives r# to contain pntr to text buffer. 5-10
+	.byte	16,0	;maximum # of chars to accept.
+
+;**************
+;   Add By Hand
+;   TxtBox Data
+;**************
+
+
+ABYText:
+	.byte	$01	;Set box pos
+	.word	$0ac	;  Xpos
+	.byte	$1c	;  Ypos
+	.byte	$05	;New fill pattern
+	.byte	$00	;Clear pattern
+	.byte	$07	;Border
+	.word	$128	;  Xpos
+	.byte	$49	;  Ypos
+	.byte	$01	;Set fill position
+	.word	$0ad	;  Xpos
+	.byte	$1d	;  Ypos
+	.byte	$03	;Fill in
+	.word	$127	;  Xpos
+	.byte	$48	;  Ypos
+	.byte	$00	;End of graphics
+
+ClrABY:	.byte	$01	;Set Clear Pos
+	.word	$0ac	;  Xpos
+	.byte	$1c	;  Ypos
+	.byte	$05	;Set pattern
+	.byte	$02	;  pattern
+	.byte	$03	;Fill in
+	.word	$128	;  Xpos
+	.byte	$49	;  Ypos
+	.byte	$00	;Done
+
+ABYtxt:	ldw	R0,#ABYText	;Write instructions on screen
+	jsr	GraphicsString
+	jsr	i_PutString
+	.word	$0b0
+	.byte	$27
+	.byte	$18,"Add Entries By Hand:",27,0
+	jsr	i_PutString
+	.word	$0b3
+	.byte	$34
+	.byte	$18,"Press RETURN on a",27,0
+	jsr	i_PutString
+	.word	$0af
+	.byte	$41
+	.byte	$18,"blank line when done.",27,0
+	rts
+
+;*******************
+;  General Add Routines
+;*******************
+
+GetID:	mvw	DataEnd,A3	;Read in ID code from user
+	avw	#17,A3	;First set pointers
+GetID2:	ldw	R0,#AIDBox	;Do ID box.
+	jsr	DoDlgBox
+	ldy	#$00
+	lda	(A3),y	;Leave with first byte
+	rts
+
+AIDBox:	.byte	$00 | 01	;user position
+	.byte	$4e	;top
+	.byte	$77	;bottom
+	.word	$0c0	;left
+	.word	$123	;right
+	.byte	11	;add text
+	.byte	$10,$0f
+	.word	IDTextA
+	.byte	13	;GetString
+	.byte	$1d	;XOffset
+	.byte	$15	;YOffset
+	.byte	A3	;gives r# to contain pntr to text buffer. 5-10
+	.byte	4	;maximum # of chars to accept.
+	.byte	0	;end of defintion
+
+Off_Add:
+	cwi	NumFiles,#700	;Max files is 712
+	beq	12$	;Skip if limit reached
+	avw	#22,DataEnd	;Set new end pointer
+	avw	#$01,NumFiles
+	ldb	SaveFlag,#$01
+	jsr	UpDtTot	;Update total box
+11$:	ldx	#$00	;Ok exit
+	rts
+12$:	ldx	#$ff	;Tell about limit being reached
+	rts
+
+ClrNxtSp:
+	ldw	R0,#22	;Fill next entry space w/zeroes
+	mvw	DataEnd,R1
+	jmp	ClearRam
+
+DObox:	.byte	$06	;Data for general info boxes
+	.word	$0b6
+	.byte	$2d
+DOtxt:	.byte	$18,"Printing, standby...",27,0
+	.byte	$18," Sorting, standby...",27,0	
+
+;***************
+;  Build Filename 
+; Table For Disk Add
+;***************
+
+BuildTable:
+	ldw	R6,#ABDBUF
+	mvw	R6,WKptr
+	ldb	TempV,#0
+	jsr	GetDirHead
+	txa		; check for dir header error
+	beq	11$
+10$:	ldx	#0
+	rts		; disk error!!
+11$:	svw	#3,R6
+	jsr	Get1stDirEntry
+12$:	txa
+	bne	10$	; check for error (and eof?)
+	tya
+	bne	10$	; end of directory perhaps?
+	lda	(R5),y	; does the file exist?
+	beq	16$	; no, so skip to next
+	iny
+	iny
+13$:	iny		; now jump to filename itself
+	lda	(R5),y	; get a letter of the filename
+	cmp	#$a0	; end of the filename reached?
+	beq	14$
+	sta	(R6),y	; y offset is ok, R6 is offset too!
+	cpy	#$13	; too far?
+	bne	13$	; no, so get next letter to copy
+14$:	lda	#0	; put filename delimeter in
+	sta	(R6),y
+	iny		; step out one byte for 0
+	cpy	#20
+	blt	14$	; keep looping until 20
+	tya		; add file length to R6
+	clc
+	adc	R6L
+	sta	R6L
+	bcc	15$
+	inc	R6H
+15$:	svw	#3,R6	; and take 3 right back!	
+	inc	TempV
+16$:	cwi	R6,#ABDBUF+$1000	; run out of space yet?
+	bge	17$	; yes, so get outa here
+	jsr	GetNxtDirEntry	; try for the next
+	bra	12$
+17$:	ldx	#0
+	rts	
+
+ABDbox:	.byte	$00 | 01	;user position
+	.byte	$37	;top
+	.byte	$95	;bottom
+	.word	$0ab	;left
+	.word	$11f	;right
+	.byte	11	;add text
+	.byte	$06,$10
+	.word	ADtxtA
+	.byte	12	;GetString
+	.byte	$09,$1b	;XOffset, YOffset
+	.byte	A1	;gives r# to contain pntr to text buffer. 5-10
+	.byte	$06,$01,$31	;DISK icon
+	.byte	$01,$01,$47	;OK icon
+	.byte	18	;user icon	
+	.byte	$08,$31
+	.word	Drvcon2
+	.byte	$02,$08,$47	;Cancel icon
+	.byte	0	;end of defintion
+
+;***************
+;   Add by Disk
+;***************
+
+ABYDISK:	ldb	A2L,#18	;Set disk name correctly
+	ldw	A1,#DiskNm
+	jsr	MoveDrNm
+	ldw	R0,#ABDbox	;Now perform actual dialog box
+	jsr	DoDlgBox
+	cbi	sysDBData,#$02	;Was cancel hit?
+	beq	12$
+15$:	cmp	#$06	;Change disks
+	bne	16$
+	jsr	ChgDisk
+	beq	16$	;A change disk error?
+12$:	rts		; An exit
+16$:	cmp	#$01
+	bne	ABYDISK	;Get filenames into buffer
+	jsr	BuildTable
+	bne	12$
+	ldw	R0,#ClearPatch	;Little visual corrective surgery
+	jsr	GraphicsString
+	ldb	dispBufferOn,#(ST_WR_FORE)
+	cbi	TempV,#$00	;Any files read at all?
+	bne	17$
+	ldw	A5,#ADtxtB
+	ldw	R0,#CanBox	;Cancel if not
+	jsr	DoDlgBox
+	bra	81$
+17$:	ldb	ColFl,#$01	;Set 1 column flag
+	mvb	TempV,Num2V
+	ldw	PgAmt,#$110
+	ldb	Num2V+1,#$00
+	ldw	FNindex,#$00	;Start on item 1, page 1
+	mvw	WKptr,FNptr	;First Entry?
+	ldw	R0,#$80
+	ldw	R1,#ABDbuf	;Clear which selected buffer
+	jsr	ClearRam
+	jsr	DisplPg
+	ldw	R0,#ADbox2	;Now do selection box
+	jsr	DoDlgBox
+	cbi	sysDBData,#$02	;Was canceled?
+	beq	81$
+	jsr	AddSelections	;Add selections to memory
+81$:	ldb	dispBufferOn,#(ST_WR_FORE|ST_WR_BACK)
+	jmp	PRxit
+
+DOBOX:	cmp	DOtxt+1	;General info box perform
+	beq	12$	;Swaps which text needed,
+	ldw	A1,#DOtxt	; then displays box.
+	ldw	A3,#DOtxt+23
+	jsr	SoSwap	;Used by sort and print
+12$:	ldw	R0,#ABYText
+	jsr	GraphicsString
+	ldw	R0,#DObox
+	jmp	GraphicsString
+CLRBOX:	ldw	R0,#ClrABY	;Clear area when done
+	jmp	GraphicsString
+
+;**************
+;   Some Misc
+;   Add By Disk 
+;     Routines
+;**************
+
+InvSup:	ldb	Temp,#$00	;Up to 16 counter
+	mvb	FNindex,TPindex
+	ldw	R3,#$0c	;Left margin for inv box
+	ldw	R4,#$94	;Right margin for inv box
+	ldb	R2L,#$1c	;Top margin starts here
+	ldb	R2H,#$26	;Bottom margin starts here
+	rts
+
+InvDo:	jsr	InvSup
+92$:	ldy	TPindex
+	lda	ABDbuf,y	;Is flag there on?
+	beq	93$
+	jsr	InvertRectangle	;Invert name
+93$:	inc	TPindex
+	inc	Temp
+	avb	#$0a,R2L	;Increment for new box
+	avb	#$0a,R2H
+	cbi	Temp,#$10	;16 filenames in the box
+	beq	95$
+	cpw	TPindex,Num2V	;Compare to window limit
+	bne	92$
+95$:	lda	#27	;Set normal print and exit
+	jmp	PutChar	
+
+ADbox2:	.byte	$00 | 01	;user position
+	.byte	$34	;top
+	.byte	$b5	;bottom
+	.word	$0a7	;left
+	.word	$11c	;right
+	.byte	11	;add text
+	.byte	$06,$0f
+	.word	ADtxt1
+	.byte	11	;add text
+	.byte	$06,$1d
+	.word	ADtxt2
+	.byte	18	;user icon
+	.byte	$05,$22
+	.word	UPcon
+	.byte	18	;user icon
+	.byte	$05,$38
+	.word	DNcon
+	.byte	$01,$02,$4f	;OK icon
+	.byte	$02,$02,$67	;Cancel icon
+	.byte	11	;add text
+	.byte	$41,$5a
+	.word	ADtxt3
+	.byte	11	;add text
+	.byte	$41,$72
+	.word	ADtxt4
+	.byte	17
+	.word	ChkInv
+	.byte	0	;end of defintion
+
+;**************
+;   Some MORE
+;   Add By Disk 
+;     Routines
+;**************
+
+ChkInv:	lda	mouseData	;Was button hit?
+	bmi	95$
+	jsr	InvSup
+92$:	jsr	IsMseInRegion	;Was it in the box?
+	cmp	#$00
+	beq	40$
+	ldy	TPindex
+	lda	ABDbuf,y	;Is flag there on?
+	bne	93$
+	lda	#$01
+	sta	ABDbuf,y	;Toggle flag
+	bra	94$
+93$:	lda	#$00
+	sta	ABDbuf,y
+94$:	jsr	InvertRectangle	;Invert box
+40$:	inc	TPindex
+	inc	Temp
+	avb	#$0a,R2L	;Increment for new box
+	avb	#$0a,R2H
+	cbi	Temp,#$10
+	beq	95$
+	cpw	TPindex,Num2V	;Done?
+	bne	92$
+95$:	rts
+
+AddSelections:
+	jsr	ClrNxtSp	;Get ID and clear first space
+	jsr	GetID
+	beq	99$	;No ID, aborted....A3 points to it
+	mvw	DataEnd,A1	;A1 has next filename
+	ldw	A2,#ABDBUF	;A2 has pointer to disk filenames
+	ldb	Temp,#$00	;Counter for buffer
+91$:	ldy	Temp
+	lda	ABDbuf,y	;Was filename selected?
+	beq	12$
+	ldx	#A2	;Copy new entry
+	ldy	#A1
+	jsr	CopyString
+	avw	#17,A1
+	ldx	#A3	;Copy ID to new entry
+	ldy	#A1
+	jsr	CopyString
+	avw	#5,A1
+	jsr	Off_Add
+	bne	99$	;Limit reached?
+	jsr	ClrNxtSp
+12$:	avw	#17,A2	;Set next dir filename
+	inc	Temp
+	cbi	Temp,#$80
+	bne	91$
+99$:	rts
+
+;***************
+;  Up/Down Box
+;***************
+
+PgUpDn:	.byte	$00 | 01	;user position
+	.byte	$40	;top
+	.byte	$84	;bottom
+	.word	$0a8	;left
+	.word	$0f3	;right
+	.byte	$02,$02,$2f	;Cancel icon
+	.byte	18	;user icon
+	.byte	$02,$05
+	.word	UPcon
+	.byte	18	;user icon
+	.byte	$02,$19
+	.word	DNcon
+	.byte	0	;end of defintion
+
+UPcon:	.word	UPmage	;graphic location
+	.word	0	;leave this at 0
+	.byte	UPconW	;width, set below
+	.byte	UPconH	;height, set below
+	.word	DoPgUp	;location of action routine
+UPmage:
+<img src="00068.png" />
+	UPconW	=picW
+	UPconH	=picH
+
+DNcon:	.word	DNmage	;graphic location
+	.word	0	;leave this at 0
+	.byte	DNconW	;width, set below
+	.byte	DNconH	;height, set below
+	.word	DoPgDn	;location of action routine
+DNmage:
+<img src="00067.png" />
+	DNconW	=picW
+	DNconH	=picH
+
+DoPgUp:	ldb	VEflag,#$00	;Clear Edit flag
+	lda	FNindex+1
+	bne	98$	;Are we on first page?
+	lda	FNindex
+	cmp	#$10
+	bcc	99$
+98$:	ldw	TempV,#$10	;If not, subtract 16 from File#
+	sbw	TempV,FNindex
+	sbw	PgAmt,FNptr
+	jmp	DispNPg	;Show new page
+99$:	rts
+
+DoPgDn:	ldy	#$00
+	sty	VEflag	;Clear Edit flag
+	mvw	FNindex,TempV	;Set work vector
+98$:	avw	#$01,TempV
+	cpw	TempV,Num2V	;Are we on an illegal page?
+	beq	99$
+	iny
+	cpy	#$10	;only up to 16
+	bne	98$
+	mvw	TempV,FNindex	;Set pointers for new page
+	adw	PgAmt,FNptr
+	jmp	DispNPg	;Show new page
+99$:	rts
+
+;**************
+;  View Routines 
+;**************
+
+R_DoView:
+	jsr	GotoFirstMenu
+	ldw	VEbox,#PgUpDn	;Set some sort of flag
+	jsr	VwEdBox
+	ldw	R0,#ClrMan	;Clear view box and exit
+	jsr	GraphicsString
+	rts
+
+VwEdBox:
+ 	cwi	NumFiles,#$00	;Empty list?
+	bne	10$
+	ldb	sysDBData,#$02
+	ldw	A5,#MISCtxt1	;If so, inform and quit
+	ldw	R0,#CanBox
+	jmp	DoDlgBox
+10$:	ldb	ColFl,#$00	;Set 2 column flag
+	mvw	NumFiles,Num2V
+	ldw	PgAmt,#$0160
+	ldw	FNindex,#$00	;Start on item 1, page 1
+	ldw	FNptr,#DataStart+3	;First Entry?
+	jsr	DisplPg
+	mvw	VEbox,R0
+	jsr	DoDlgBox	;Do Nothing
+	rts
+
+DispNPg:	ldw	R0,#ClrMan	;Clear view box for new page
+	jsr	GraphicsString
+DisplPg:	jsr	UseSystemFont	;Set main font
+	mvw	FNindex,TPindex
+	mvw	FNptr,WKptr	;Entry offset
+	ldb	R1H,#$23		;Row start
+	ldb	VCount,#$00	;1-x counter
+75$:	ldw	R11,#$0f	;Fname column
+	lda	#27
+	jsr	PutChar	;Send normal writing code
+	mvw	WKptr,R0	;Setup for filename print
+	jsr	PutString	;Display filename
+	ldw	R11,#$70	;Set Code column
+	avw	#17,WKptr	;Point for code
+	lda	ColFl	;EQ if 2nd column required
+	bne	17$
+	lda	#$18	;Set Thick char
+	jsr	PutChar
+	mvw	WKptr,R0	;Move string to position
+	jsr	PutString
+	avw	#5,WKptr	;Set for next filename
+	bra	17$	;Unecessary skip
+77$:	bra	75$	;Jump back up, a vector
+17$:	avb	#$0a,R1H	;Set new column
+	avw	#$01,TPindex	;Update real counter
+	cpw	TPindex,Num2V	;Total files displayed?
+	beq	89$
+	inc	VCount	;Count names
+	cbi	VCount,#$10	;if 16? done	
+	beq	89$
+	bra	77$
+90$:	lda	#27	;Reset to normal chars
+	jmp	PutChar
+89$:	lda	ColFl	;Should invert checks be made?
+	beq	90$
+	jmp	InvDo	;Invert appropriate names
+
+;*****************
+;  Main Sort Routines
+;*****************
+R_DoSort:
+	 jsr	GotoFirstMenu	;You know
+	cwi	NumFiles,#$00	;If no or one file, don't sort
+	beq	48$
+	cwi	NumFiles,#$01
+	bne	49$
+48$:	ldw	A5,#SOtxt1	;Sort complete!!
+	ldw	R0,#OKBox
+	jmp	DoDlgBox
+49$:	lda	#' '
+	jsr	DOBOX
+50$:	ldw	A4,#$01	;Slow pointer on first (#1)
+	ldw	A1,#DataStart+3	;Slow filename
+54$:	mvw	A4,A5	;Copy Slow into fast
+	mvw	A1,A2	;  "    "    "   "
+	mvw	A1,A3	;Copy Slow into low
+55$:	avw	#$01,A5	;Increment Fast
+	avw	#22,A2
+	jsr	IsLess
+	beq	56$	;Skip if Fast is not less than Low
+	mvw	A2,A3	;Set new Low
+56$:	cpw	A5,NumFiles
+	bne	55$
+	cpw	A1,A3	;If no low found, no swap!
+	beq	57$
+	jsr	SoSwap
+57$:	avw	#$01,A4	;Update slow mover
+	avw	#22,A1
+	cpw	A4,NumFiles
+	bne	54$
+	jsr	CLRBOX
+	ldw	A5,#SOtxt1	;Sort complete!!  AGAIN!!!!!!
+	ldb	SaveFlag,#$01
+	ldw	R0,#OKBox
+	jmp	DoDlgBox
+
+
+SoSwap:	ldy	#$00	;This is a swap routine
+11$:	lda	(A3),y	;Put A3 into TempS
+	sta	TempS,y
+	iny
+	cpy	#22
+	bne	11$
+	ldy	#$00
+22$:	lda	(A1),y	;Put A1 into A3
+	sta	(A3),y
+	iny
+	cpy	#22
+	bne	22$
+	ldy	#$00
+33$:	lda	TempS,y	;Put TempS into A1
+	sta	(A1),y
+	iny
+	cpy	#22
+	bne	33$
+	rts
+
+;*****************
+;  IsLess & MkUpp
+;  Routines for Sorting
+;*****************
+
+IsLess:	ldy	#$00	;Compare A3 to A2.
+76$:	lda	(A3),y	;Return eq if A3 <= A2
+	jsr	MkUpp
+	sta	TempV
+	lda	(A2),y
+	jsr	MkUpp
+11$:	cmp	TempV	;Return neq	 if A2 < A3
+	bcc	77$
+	bne	12$
+	iny
+	cpy	#16	;16 file chars total
+	bne	76$
+12$:	lda	#$00
+	rts
+77$:	lda	#$ff	;Return neq
+	rts
+
+MkUpp:	cmp	#$41	;This routines makes
+	bcc	11$	;an uppercase letter in (a)
+	cmp	#$61	;lowercase for comparisons.
+	bcs 	11$
+	clc
+	adc	#$20
+11$:	rts
+
+;**************
+;  Data for Edit/
+;   Delete Box
+;**************
+
+EdDlbox:	.byte	$00 | 01	;user position
+	.byte	$2d	;top
+	.byte	$a1	;bottom
+	.word	$0bd	;left
+	.word	$118	;right
+	.byte	18	;user icon
+	.byte	$03,$03
+	.word	UPcon
+	.byte	18	;user icon
+	.byte	$03,$15
+	.word	DNcon
+	.byte	18	;user icon
+	.byte	$03,$3a
+	.word	Edcon
+	.byte	18	;user icon
+	.byte	$03,$4e
+	.word	Delcon
+	.byte	$02,$03,$62	;Cancel icon
+	.byte	17	;Click routine
+	.word	EdClk
+	.byte	0	;end of defintion
+Edcon:
+	.word	Edmage	;graphic location
+	.word	0	;leave this at 0
+	.byte	EdconW	;width, set below
+	.byte	EdconH	;height, set below
+	.word	DoEdit	;location of action routine
+
+Edmage:
+<img src="00069.png" />	EdconW	=picW
+	EdconH	=picH
+
+Delcon:
+	.word	Delmage	;graphic location
+	.word	0	;leave this at 0
+	.byte	DlconW	;width, set below
+	.byte	DlconH	;height, set below
+	.word	DoDel	;location of action routine
+
+Delmage:
+<img src="00070.png" />	DlconW	=picW
+	DlconH	=picH
+
+
+
+;**************
+;  Edit Routines 
+;**************
+
+R_DoEdit:
+	jsr	GotoFirstMenu
+	ldb	VEflag,#$00	;Which item flag inverted
+15$:	ldw	VEbox,#EdDlbox	;Tell which dialog
+	jsr	VwEdBox
+	cbi	sysDBData,#$99	;Edit button hit?
+	bne	16$
+	jsr	DOEdit
+16$:	cbi	sysDBData,#$02	;Exit?
+	bne	15$
+	ldw	R0,#ClrMan	;Clear view window and exit
+	jsr	GraphicsString
+	rts
+
+EdClk:	jsr	InvSup
+	lda	mouseData	;Was button hit?
+	bpl	31$
+	rts
+31$:	jsr	IsMseInRegion	;Was it in the box?
+	cmp	#$00
+	beq	30$	;not!
+	jsr	InvertRectangle
+	lda	VEflag	;Was it previously clicked?
+	bne	33$
+32$:	mvw	R2,VEflag	;Move in new values
+	mvw	TPindex,VEindex
+	bra	35$
+40$:	bra	31$	;A vector
+33$:	cpw	TPindex,VEindex	;Clicked on same?
+	bne	34$
+	ldb	VEflag,#$00	;Clear flag
+30$:	bra	35$
+34$:	mvw	R2,Temp+4	;If not, clear old
+	mvw	VEflag,R2
+	jsr	InvertRectangle	;Uninvert old box
+	mvw	Temp+4,R2
+	bra	32$
+35$:	avb	#$0a,R2L	;Increment for new box
+	avb	#$0a,R2H
+	inc	Temp
+	avw	#$01,TPindex
+	cbi	Temp,#$10
+	beq	36$
+	cpw	TPindex,Num2V	;Done?
+	bne	40$
+36$:	rts	
+
+FindAdd:	ldw	A0,#$00
+	ldw	R0,#DataStart+3	;Start here
+11$:	cpw	A0,VEindex
+	beq	12$
+	avw	#22,R0	;Increment pointer
+	avw	#$01,A0
+	bra	11$
+12$:	rts
+
+
+
+;*****************
+;  Perform Main Edit
+;  And Delete Code
+;*****************
+DoDel:	lda	VEflag	;Is a filename selected?
+	bne	12$
+	rts
+12$:	ldb	VEflag,#$00	;Clear select flag
+	ldb	SaveFlag,#$01
+	mvw	VEindex,A1	;Set index pointer
+	cpw	VEindex,NumFiles	;Are we deleteing the last?
+	beq	90$	;Then don't move memory
+	jsr	FindAdd	;Get index address
+	mvw	R0,R1
+	avw	#22,R0	;Set source pointer ahead
+	ldw	R2,#$00
+13$:	avw	#$01,A1	;Find size of moving block
+	avw	#22,R2
+	cpw	A1,NumFiles
+	bne	13$
+	jsr	MoveData	;Move the block back
+90$:	ldw	A3,#$01	;Adjust Numfiles and pointer
+	sbw	A3,NumFiles
+	sbw	A3,Num2V
+	jsr	UpDtTot
+	ldw	A3,#22
+	sbw	A3,DataEnd	;Update end pointer
+	jsr	DispNPg
+	cwi	Num2V,#$00
+	bne	99$
+	ldb	sysDBData,#$02
+	jmp	RstrFrmDialog
+99$:	rts
+
+DoEdit:	lda	VEflag	;Was a filename selected?
+	beq	99$
+	ldb	VEflag,#$00	;Clear the flag.
+	ldb	sysDBData,#$99
+	jmp	RstrFrmDialog	;Exit for new dialog box
+99$:	rts
+
+DOEdit:	jsr	FindAdd	;Get pointer to filename
+	ldb	SaveFlag,#$01
+	mvw	R0,A5	;First pointer setup
+	ldw	R6,#Temp
+	lda	#22	;Set pointers for copy block.
+	ldx	#A5
+	ldy	#R6
+	jsr	CopyFString	;Copy filename into Temp
+	mvw	R0,A5	;Second pointer setup
+	ldw	R6,#Temp
+	ldw	R0,#RenBox	;Call rename box
+	jsr	DoDlgBox
+	lda	Temp	;Was filename deleted?
+	beq	99$
+	ldw	A3,Temp+17	;Set ID pointer in Temp
+	jsr	GetID2	;Get new ID
+	beq	99$
+	jsr	FindAdd
+	ldw	A5,#Temp
+	lda	#22
+	ldx	#A5
+	ldy	#R0
+	jsr	CopyFString
+99$:	ldb	sysDBData,#$00	;Clear sysdata
+	ldw	R0,#ClrMan
+	jsr	GraphicsString
+	rts	
+
+;*****************
+;  Misc Print routines
+;*****************
+
+PrtSpace:	lda	A0L	;Print A0L spaces
+	bne	11$
+	rts
+11$:	ldw	R0,#Spaces+1
+	jsr	PrintASCII
+	dec	A0L
+	bra	PrtSpace
+
+PrtRtn:	lda	#$0d	;Send a return
+PrtCHR:	sta	Charac	;Send a character in a
+	ldw	R0,#Charac
+	jmp	PrintASCII
+Charac:	.byte	13,0
+
+PrtNext:	ldb	A0L,#22	;Display col 2 entries
+	jsr	PrtSpace
+PrtEntry:	mvw	A1,R0
+	jsr	PrintASCII	;print filename
+	avw	#17,A1
+	jsr	PrtRst
+	lda	#$2d	;Print stuff for code
+	jsr	PrtCHR
+	lda	#' '
+	jsr	PrtCHR
+	mvw	A1,R0	;print code itself
+	jsr	PrintASCII
+	avw	#5,A1
+	jsr	PrtRst
+	lda	#$2d
+	jmp	PrtCHR
+PrtRst:	mvw	A1,A0	;Columnize codes
+	sbw	R0,A0
+	jmp	PrtSpace	
+
+PrtHeader:		;Display name of file
+	jsr	PrtRtn
+	ldb	A0L,#30
+	jsr	PrtSpace
+	lda	#'"'
+	jsr	PrtCHR
+	ldw	R0,#FileNm
+	jsr	PrintASCII
+	lda	#'"'
+	jsr	PrtCHR
+	jsr	PrtRtn
+	jmp	PrtRtn
+
+
+;**************
+;   Print Routine
+;**************
+
+R_DoPrint:
+	jsr	GotoFirstMenu
+	ldw	A5,#MISCtxt1
+ 	cwi	NumFiles,#$00	;Empty list?
+	beq	98$
+	ldw	A3,#DADrive
+	jsr	DoDrvM
+	bne	99$
+	ldw	R0L,#$01	;Load printer driver
+	ldw	R6,#$8465
+	ldw	R7,#$7900
+	jsr	GetFile
+	cpx	#$00
+	beq	10$
+97$:	ldw	A5,#PRtxtA	;Printer not accessible
+98$:	ldw	R0,#CanBox
+	jsr	DoDlgBox
+99$:	jmp	PRxit
+10$:	lda	#'P'
+	jsr	DOBOX
+	ldw	A1,#DataStart+3	;Set start of list
+	ldw	A2,#$00	;Total files printed
+50$:	jsr	InitForPrint	;Master Reset
+	jsr	StartPrint	;Printer initialization
+	cpx	#$00
+	bne	97$	;If printer active, exit
+	jsr	StartASCII
+	jsr	PrtHeader	;Display name of file
+	ldw	R1,#spriteBuf
+	ldw	R2,#$00
+	ldw	A5,#$00	;Clear page + col counter
+54$:	dec	A5L
+	beq	55$	;If col 1, print entry
+	ldb	A5L,#$01
+	jsr	PrtEntry
+	bra	56$
+55$:	jsr	PrtNext	;If col 2, print next
+	jsr	PrtRtn
+56$:	inc	A2L	;Increment files printed
+	bne	58$
+	inc	A2H
+58$:	cpw	A2,NumFiles
+	beq	60$
+	inc	A5H	;Increment page counter
+	cbi	A5H,#$78
+	bne	54$	;New page?
+	jsr	StopPrint
+	bra	50$
+60$:	jsr	StopPrint
+PRxit:	ldw	R0,#ClearScreen
+	jsr	GraphicsString
+	jsr	InitScreen
+	jmp	ReDoMenu
+
+
+;***************
+;  Initialize Main 
+;     Screen
+;***************
+
+InitScreen:	;Print all main screen graphics
+	ldw	R0,#MainScn
+	jsr	GraphicsString
+	ldw	R0,#CtBox
+	jsr	GraphicsString
+UpDtTot:	ldw	R11,#263	;Update box with total files!
+	ldb	R1H,#14
+	mvw	NumFiles,R0
+	lda	#$ff
+	jsr	PutDecimal
+	ldw	R0,#Spaces
+	jmp	PutString
+
+MainScn:	.byte	$05, $01	;Set full pattern
+	.byte	$01	;Set position for shadow
+	.word	10+5	;   Xpos
+	.byte	25+5	;   Ypos
+	.byte	$03	;Make shadow
+	.word	150+5	;   Xpos
+	.byte	190+5	;   Ypos
+	.byte	$01	;Set position
+	.word	10	;  Xpos?
+	.byte	25	;  Ypos?
+	.byte	$07	;Make the border
+	.word	150	;  Xpos?
+	.byte	190	;  Ypos?
+ClrMan:	.byte	$05, $00	;Set clear pattern
+	.byte	$01	;Set position for fill in
+	.word	10+1	;   Xpos
+	.byte	25+1	;   Ypos
+	.byte	$03	;Make fill in 
+	.word	150-1	;   Xpos
+	.byte	190-1	;   Ypos
+	.byte	0	;End of graphics
+
+CtBox:	.byte	$05, $01	;Set full pattern
+	.byte	$01	;Set position for shadow
+	.word	220+3	;   Xpos
+	.byte	5+3	;   Ypos
+	.byte	$03	;Make shadow
+	.word	300+3	;   Xpos
+	.byte	18+3	;   Ypos
+	.byte	$05, $00	;Set clear pattern
+	.byte	$01	;Set position
+	.word	220	;  Xpos?
+	.byte	5	;  Ypos?
+	.byte	$07	;Make the border
+	.word	300	;  Xpos?
+	.byte	18	;  Ypos?
+	.byte	$01	;Set position for fill in
+	.word	220+1	;   Xpos
+	.byte	5+1	;   Ypos
+	.byte	$03	;Make fill in 
+	.word	300-1	;   Xpos
+	.byte	18-1	;   Ypos
+	.byte	$06	;Total text
+	.word	222	;   Xpos
+	.byte	14	;   Ypos
+	.byte	$18,"Total:",27,0,0,0	;Text - End o' graphics
+
+;*******************
+;  Run Desk Accessories
+;*******************
+
+RunDA:
+	sta	R6L	;calculate filename of DA
+	asl	a
+	asl	a
+	asl	a
+	asl	a
+	add	R6L
+	clc
+	adc	#[(DAText-17)
+	sta	R6L
+	lda	#0
+	adc	#](DAText-17)
+	sta	R6H
+	phw	R6
+
+	ldw	A3,#DADrive		;DA init code goes here, close files, etc..
+	jsr	DoDrvM
+	beq	01$
+	plw	R6
+	rts
+
+01$:	ldw	R0,#$8a40	;copy sprite data
+	ldw	R1,#spriteBuf
+	ldw	R2,#(7*64)	;all 7 sprites?
+	jsr	MoveData
+	plw	R6
+	ldx	$0001	
+	ldb	$0001,#$35
+	phb	$d017
+	ldb	$d017,#0
+	stx	$0001
+	
+	ldb	R0L,#0	;standard loading option
+	lda	#%0000000	;tell DA what to save
+	sta	R10L
+	jsr	GetFile
+
+	;Now retreave all that back
+
+	stx	R6L
+	ldx	$0001
+	ldb 	$0001,#$35
+	plb	$d017
+	stx	$0001
+	ldw	R0,#spriteBuf
+	ldw	R1,#$8a40
+	ldw	R2,#(7*64)
+	jsr	MoveData
+
+	mvb	screencolors,R2L
+	ldw	R1,#COLOR_MATRIX
+	ldw	R0,#(25*40)
+	jsr	FillRam
+	ldb	R2L,#15
+	ldb	R2H,#199
+	ldw	R3,#0
+	ldw	R4,#319
+	jsr	RecoverRectangle
+
+	jsr	DFerrors
+	rts
+
+.ramsect
+spriteBuf:	.block	448	;Sprites during Desk Acc
+ABDbuf:	.block	154	;Selection flags
+DAText:	.block	148	;Filenames for desk acc
+DiskNm:	.block 	20	;Name of current disk
+FileNm:	.block 	20	;Name of editing file
+
+Temp:	.block	25	;Temporary work space
+TempS:	.block	25	;Usually holds strings
+TempV:	.block	8	;Usually holds values
+
+Num2V:	.block	2	;Index for view box
+ColFl:	.block	1	;# of columns viewed
+VCount:	.block	1	;View count...
+FNindex:	.block	2	;Index to file names
+FNptr:	.block	2	;Ptr to file names
+TPindex:	.block	2	;Temporary index
+WKptr:	.block	2	;Another work pointer
+PgAmt:	.block	2	;Page amount?
+SaveFlag:	.block	1	;Whether to write or not
+
+VEbox:	.block	2	;Which dialog box for VE
+VEflag:	.block	2	;Flag for view edit
+VEindex:	.block	2	;Work index for view edit
+
+DADrive:	.block	21	;Drive desk accessories are on
+FileDrive:	.block	21	;Drive work file is on
+
+DataStart:			;Main data area
+NumFiles:	.block	2
+
+</pre></body></html>
